@@ -127,7 +127,7 @@ def ai_arbiter(text: str, system_prompt: str, client: genai.Client) -> dict:
     """
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.5-flash-lite",
             contents=f"Проанализируй это сообщение из Telegram-чата:\n\n\"{text}\"",
             config=genai.types.GenerateContentConfig(
                 system_instruction=system_prompt,
@@ -195,6 +195,13 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     text = update.effective_message.text
     user = update.effective_user
+    chat = update.effective_chat
+
+    # DEBUG: логируем КАЖДОЕ входящее сообщение
+    logger.info(
+        "📨 Сообщение получено | chat=%s (type=%s) | user=%s (id=%s) | text=%s",
+        chat.title or chat.id, chat.type, user.full_name, user.id, text[:80],
+    )
     patterns = context.bot_data["patterns"]
     system_prompt = context.bot_data["system_prompt"]
     gemini_client = context.bot_data["gemini_client"]
@@ -234,17 +241,31 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     except Exception as e:
         logger.error("Не удалось удалить сообщение: %s", e)
 
-    # 2. Баним пользователя
+    # 2. Баним пользователя (но НЕ админов группы)
+    is_admin = False
     try:
-        await update.effective_chat.ban_member(user.id)
-        logger.info("🔨 Пользователь забанен: %s (id=%s)", user.full_name, user.id)
+        admins = await update.effective_chat.get_administrators()
+        admin_ids = [admin.user.id for admin in admins]
+        is_admin = user.id in admin_ids
     except Exception as e:
-        logger.error("Не удалось забанить пользователя: %s", e)
+        logger.error("Не удалось получить список админов: %s", e)
+
+    if is_admin:
+        logger.info("👑 Пользователь %s — админ группы, бан пропущен", user.full_name)
+    else:
+        try:
+            await update.effective_chat.ban_member(user.id)
+            logger.info("🔨 Пользователь забанен: %s (id=%s)", user.full_name, user.id)
+        except Exception as e:
+            logger.error("Не удалось забанить пользователя: %s", e)
 
     # 3. Уведомление админу
     if ADMIN_CHAT_ID:
         try:
             alert_text = format_admin_alert(update, ai_result)
+            # Добавляем пометку если админ
+            if is_admin:
+                alert_text += "\n\n👑 <i>Пользователь — админ группы, бан не применён</i>"
             await context.bot.send_message(
                 chat_id=int(ADMIN_CHAT_ID),
                 text=alert_text,
@@ -279,10 +300,10 @@ def main() -> None:
     app.bot_data["system_prompt"] = system_prompt
     app.bot_data["gemini_client"] = gemini_client
 
-    # Обрабатываем только текстовые сообщения в группах
+    # Обрабатываем текстовые сообщения в любых чатах (для отладки)
     app.add_handler(
         MessageHandler(
-            filters.TEXT & ~filters.COMMAND & (filters.ChatType.GROUP | filters.ChatType.SUPERGROUP),
+            filters.TEXT & ~filters.COMMAND,
             on_message,
         )
     )
