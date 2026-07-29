@@ -70,11 +70,22 @@
 git clone https://github.com/Nam0vicH/DobriyDobriyBot.git
 cd DobriyDobriyBot
 
-# 2. Установите зависимости
+# 2. Установи uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 3. Установите зависимости
 uv sync
 
-# 3. Создайте .env файл
+# 4. Создайте .env файл
 cp .env.example .env
+nano .env
+
+# 5. Настрой бота в @BotFather: Group Privacy → Off
+# 6. Добавь бота в группу как админа (удаление + бан)
+# 7. Напиши боту /start в личку
+
+# 8. Запусти:
+uv run python main.py
 ```
 
 ### Настройка
@@ -86,8 +97,6 @@ TELEGRAM_BOT_TOKEN=ваш_токен_от_BotFather
 GEMINI_API_KEY=ваш_ключ_Gemini_API
 ADMIN_CHAT_ID=ваш_telegram_id
 ```
-
-> 💡 **Как узнать ADMIN_CHAT_ID?** Напишите боту [@userinfobot](https://t.me/userinfobot) — он покажет ваш ID.
 
 ### Настройка бота в Telegram
 
